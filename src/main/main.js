@@ -126,6 +126,7 @@ function createWindowOptions() {
 
 function configureWindow(window, openerWindow = null) {
   window.removeMenu()
+  let pendingAuthCallbackUrl = null
 
   logAuth('configure-window', {
     windowId: window.webContents.id,
@@ -143,10 +144,7 @@ function configureWindow(window, openerWindow = null) {
       callbackUrl: url
     })
 
-    if (!openerWindow.isDestroyed()) {
-      openerWindow.loadURL(canvaUrl)
-      openerWindow.focus()
-    }
+    pendingAuthCallbackUrl = url
 
     return true
   }
@@ -255,8 +253,17 @@ function configureWindow(window, openerWindow = null) {
       openerWindowId: openerWindow?.webContents.id ?? null
     })
 
-    if (openerWindow && isCanvaAuthCallback(window.webContents.getURL()) && !window.isDestroyed()) {
-      window.close()
+    if (openerWindow && pendingAuthCallbackUrl === window.webContents.getURL()) {
+      if (!openerWindow.isDestroyed()) {
+        openerWindow.loadURL(canvaUrl)
+        openerWindow.focus()
+      }
+
+      pendingAuthCallbackUrl = null
+
+      if (!window.isDestroyed()) {
+        window.close()
+      }
     }
   })
 
