@@ -18,6 +18,20 @@ function isPopupHost(hostname) {
   return popupHostSuffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))
 }
 
+function shouldOpenInPopup(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+
+    if (isPopupHost(url.hostname)) {
+      return true
+    }
+
+    return isTrustedHost(url.hostname) && url.pathname.startsWith('/oauth/authorize/')
+  } catch {
+    return false
+  }
+}
+
 function isAllowedUrl(rawUrl) {
   try {
     const url = new URL(rawUrl)
@@ -56,6 +70,16 @@ function navigateWindow(window, rawUrl) {
   }
 }
 
+function isCanvaAuthCallback(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+
+    return isTrustedHost(url.hostname) && url.pathname.startsWith('/oauth/authorized/')
+  } catch {
+    return false
+  }
+}
+
 function denyPermissionRequest(webContents, permission, callback) {
   callback(false)
 }
@@ -89,15 +113,26 @@ function createWindowOptions() {
   }
 }
 
-function configureWindow(window) {
+function configureWindow(window, openerWindow = null) {
   window.removeMenu()
+  let pendingAuthCallbackUrl = null
+
+  const completeAuthInOpener = (event, url) => {
+    if (!openerWindow || !isCanvaAuthCallback(url)) {
+      return false
+    }
+
+    pendingAuthCallbackUrl = url
+
+    return true
+  }
 
   window.webContents.on('did-create-window', childWindow => {
-    configureWindow(childWindow)
+    configureWindow(childWindow, window)
   })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedUrl(url) && isPopupHost(new URL(url).hostname)) {
+    if (isAllowedUrl(url) && shouldOpenInPopup(url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -124,6 +159,10 @@ function configureWindow(window) {
   })
 
   window.webContents.on('will-navigate', (event, url) => {
+    if (completeAuthInOpener(event, url)) {
+      return
+    }
+
     if (!isAllowedUrl(url)) {
       event.preventDefault()
       openInBrowser(url)
@@ -131,9 +170,28 @@ function configureWindow(window) {
   })
 
   window.webContents.on('will-redirect', (event, url) => {
+    if (completeAuthInOpener(event, url)) {
+      return
+    }
+
     if (!isAllowedUrl(url)) {
       event.preventDefault()
       openInBrowser(url)
+    }
+  })
+
+  window.webContents.on('did-finish-load', () => {
+    if (openerWindow && pendingAuthCallbackUrl === window.webContents.getURL()) {
+      if (!openerWindow.isDestroyed()) {
+        openerWindow.loadURL(canvaUrl)
+        openerWindow.focus()
+      }
+
+      pendingAuthCallbackUrl = null
+
+      if (!window.isDestroyed()) {
+        window.close()
+      }
     }
   })
 
