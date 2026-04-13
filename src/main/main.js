@@ -143,15 +143,9 @@ function configureWindow(window, openerWindow = null) {
       callbackUrl: url
     })
 
-    event.preventDefault()
-
     if (!openerWindow.isDestroyed()) {
-      openerWindow.loadURL(url)
+      openerWindow.loadURL(canvaUrl)
       openerWindow.focus()
-    }
-
-    if (!window.isDestroyed()) {
-      window.close()
     }
 
     return true
@@ -260,6 +254,10 @@ function configureWindow(window, openerWindow = null) {
       currentUrl: window.webContents.getURL(),
       openerWindowId: openerWindow?.webContents.id ?? null
     })
+
+    if (openerWindow && isCanvaAuthCallback(window.webContents.getURL()) && !window.isDestroyed()) {
+      window.close()
+    }
   })
 
   window.webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedUrl, isMainFrame) => {
