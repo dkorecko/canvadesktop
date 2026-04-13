@@ -9,15 +9,6 @@ const trustedHostSuffixes = [
   'gstatic.com'
 ]
 const popupHostSuffixes = ['google.com', 'googleapis.com', 'googleusercontent.com']
-const authDebugEnabled = true
-
-function logAuth(eventName, details = {}) {
-  if (!authDebugEnabled) {
-    return
-  }
-
-  console.log(`[canva-auth] ${eventName}`, JSON.stringify(details))
-}
 
 function isTrustedHost(hostname) {
   return trustedHostSuffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))
@@ -72,8 +63,6 @@ function openInBrowser(rawUrl) {
 }
 
 function navigateWindow(window, rawUrl) {
-  logAuth('navigate-window', { targetUrl: rawUrl })
-
   if (isAllowedUrl(rawUrl)) {
     window.loadURL(rawUrl)
   } else {
@@ -128,21 +117,10 @@ function configureWindow(window, openerWindow = null) {
   window.removeMenu()
   let pendingAuthCallbackUrl = null
 
-  logAuth('configure-window', {
-    windowId: window.webContents.id,
-    openerWindowId: openerWindow?.webContents.id ?? null
-  })
-
   const completeAuthInOpener = (event, url) => {
     if (!openerWindow || !isCanvaAuthCallback(url)) {
       return false
     }
-
-    logAuth('complete-auth-in-opener', {
-      popupWindowId: window.webContents.id,
-      openerWindowId: openerWindow.webContents.id,
-      callbackUrl: url
-    })
 
     pendingAuthCallbackUrl = url
 
@@ -150,22 +128,10 @@ function configureWindow(window, openerWindow = null) {
   }
 
   window.webContents.on('did-create-window', childWindow => {
-    logAuth('did-create-window', {
-      parentWindowId: window.webContents.id,
-      childWindowId: childWindow.webContents.id
-    })
-
     configureWindow(childWindow, window)
   })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    logAuth('set-window-open-handler', {
-      windowId: window.webContents.id,
-      targetUrl: url,
-      allowed: isAllowedUrl(url),
-      popup: shouldOpenInPopup(url)
-    })
-
     if (isAllowedUrl(url) && shouldOpenInPopup(url)) {
       return {
         action: 'allow',
@@ -193,12 +159,6 @@ function configureWindow(window, openerWindow = null) {
   })
 
   window.webContents.on('will-navigate', (event, url) => {
-    logAuth('will-navigate', {
-      windowId: window.webContents.id,
-      targetUrl: url,
-      openerWindowId: openerWindow?.webContents.id ?? null
-    })
-
     if (completeAuthInOpener(event, url)) {
       return
     }
@@ -210,12 +170,6 @@ function configureWindow(window, openerWindow = null) {
   })
 
   window.webContents.on('will-redirect', (event, url) => {
-    logAuth('will-redirect', {
-      windowId: window.webContents.id,
-      targetUrl: url,
-      openerWindowId: openerWindow?.webContents.id ?? null
-    })
-
     if (completeAuthInOpener(event, url)) {
       return
     }
@@ -226,33 +180,7 @@ function configureWindow(window, openerWindow = null) {
     }
   })
 
-  window.webContents.on('did-navigate', (_, url) => {
-    logAuth('did-navigate', {
-      windowId: window.webContents.id,
-      currentUrl: url,
-      openerWindowId: openerWindow?.webContents.id ?? null
-    })
-  })
-
-  window.webContents.on('did-redirect-navigation', (_, url, isInPlace, isMainFrame, frameProcessId, frameRoutingId) => {
-    logAuth('did-redirect-navigation', {
-      windowId: window.webContents.id,
-      currentUrl: url,
-      openerWindowId: openerWindow?.webContents.id ?? null,
-      isInPlace,
-      isMainFrame,
-      frameProcessId,
-      frameRoutingId
-    })
-  })
-
   window.webContents.on('did-finish-load', () => {
-    logAuth('did-finish-load', {
-      windowId: window.webContents.id,
-      currentUrl: window.webContents.getURL(),
-      openerWindowId: openerWindow?.webContents.id ?? null
-    })
-
     if (openerWindow && pendingAuthCallbackUrl === window.webContents.getURL()) {
       if (!openerWindow.isDestroyed()) {
         openerWindow.loadURL(canvaUrl)
@@ -265,17 +193,6 @@ function configureWindow(window, openerWindow = null) {
         window.close()
       }
     }
-  })
-
-  window.webContents.on('did-fail-load', (_, errorCode, errorDescription, validatedUrl, isMainFrame) => {
-    logAuth('did-fail-load', {
-      windowId: window.webContents.id,
-      errorCode,
-      errorDescription,
-      validatedUrl,
-      isMainFrame,
-      openerWindowId: openerWindow?.webContents.id ?? null
-    })
   })
 
 }
