@@ -27,6 +27,20 @@ function isPopupHost(hostname) {
   return popupHostSuffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))
 }
 
+function shouldOpenInPopup(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+
+    if (isPopupHost(url.hostname)) {
+      return true
+    }
+
+    return isTrustedHost(url.hostname) && url.pathname.startsWith('/oauth/authorize/')
+  } catch {
+    return false
+  }
+}
+
 function isAllowedUrl(rawUrl) {
   try {
     const url = new URL(rawUrl)
@@ -156,10 +170,11 @@ function configureWindow(window, openerWindow = null) {
     logAuth('set-window-open-handler', {
       windowId: window.webContents.id,
       targetUrl: url,
-      allowed: isAllowedUrl(url)
+      allowed: isAllowedUrl(url),
+      popup: shouldOpenInPopup(url)
     })
 
-    if (isAllowedUrl(url) && isPopupHost(new URL(url).hostname)) {
+    if (isAllowedUrl(url) && shouldOpenInPopup(url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
