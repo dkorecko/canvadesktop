@@ -154,7 +154,7 @@ function configureWindow(window, openerWindow = null) {
       }
 
       if (!openerWindow.isDestroyed()) {
-        openerWindow.loadURL(canvaUrl)
+        openerWindow.loadURL(url)
         openerWindow.focus()
       }
 
