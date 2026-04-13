@@ -102,6 +102,25 @@ function createWindowOptions() {
 function configureWindow(window, openerWindow = null) {
   window.removeMenu()
 
+  const completeAuthInOpener = (event, url) => {
+    if (!openerWindow || !isCanvaAuthCallback(url)) {
+      return false
+    }
+
+    event.preventDefault()
+
+    if (!openerWindow.isDestroyed()) {
+      openerWindow.loadURL(url)
+      openerWindow.focus()
+    }
+
+    if (!window.isDestroyed()) {
+      window.close()
+    }
+
+    return true
+  }
+
   window.webContents.on('did-create-window', childWindow => {
     configureWindow(childWindow, window)
   })
@@ -134,6 +153,10 @@ function configureWindow(window, openerWindow = null) {
   })
 
   window.webContents.on('will-navigate', (event, url) => {
+    if (completeAuthInOpener(event, url)) {
+      return
+    }
+
     if (!isAllowedUrl(url)) {
       event.preventDefault()
       openInBrowser(url)
@@ -141,36 +164,15 @@ function configureWindow(window, openerWindow = null) {
   })
 
   window.webContents.on('will-redirect', (event, url) => {
+    if (completeAuthInOpener(event, url)) {
+      return
+    }
+
     if (!isAllowedUrl(url)) {
       event.preventDefault()
       openInBrowser(url)
     }
   })
-
-  if (openerWindow) {
-    const finishAuthFlow = url => {
-      if (!isCanvaAuthCallback(url)) {
-        return
-      }
-
-      if (!openerWindow.isDestroyed()) {
-        openerWindow.loadURL(url)
-        openerWindow.focus()
-      }
-
-      if (!window.isDestroyed()) {
-        window.close()
-      }
-    }
-
-    window.webContents.on('did-navigate', (_, url) => {
-      finishAuthFlow(url)
-    })
-
-    window.webContents.on('did-redirect-navigation', (_, url) => {
-      finishAuthFlow(url)
-    })
-  }
 
 }
 
