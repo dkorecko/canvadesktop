@@ -1,6 +1,22 @@
 const { app, BrowserWindow, shell, session } = require('electron')
 
 const canvaUrl = 'https://www.canva.com/'
+const trustedHostSuffixes = [
+  'canva.com',
+  'google.com',
+  'googleapis.com',
+  'googleusercontent.com',
+  'gstatic.com'
+]
+const popupHostSuffixes = ['google.com', 'googleapis.com', 'googleusercontent.com']
+
+function isTrustedHost(hostname) {
+  return trustedHostSuffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))
+}
+
+function isPopupHost(hostname) {
+  return popupHostSuffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))
+}
 
 function isAllowedUrl(rawUrl) {
   try {
@@ -10,15 +26,33 @@ function isAllowedUrl(rawUrl) {
       return false
     }
 
-    return true
+    return isTrustedHost(url.hostname)
+  } catch {
+    return false
+  }
+}
+
+function isExternalUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+
+    return url.protocol === 'https:'
   } catch {
     return false
   }
 }
 
 function openInBrowser(rawUrl) {
-  if (isAllowedUrl(rawUrl)) {
+  if (isExternalUrl(rawUrl)) {
     shell.openExternal(rawUrl)
+  }
+}
+
+function navigateWindow(window, rawUrl) {
+  if (isAllowedUrl(rawUrl)) {
+    window.loadURL(rawUrl)
+  } else {
+    openInBrowser(rawUrl)
   }
 }
 
@@ -27,7 +61,14 @@ function denyPermissionRequest(webContents, permission, callback) {
 }
 
 function createWindow() {
-  const mainWindow = new BrowserWindow({
+  const mainWindow = new BrowserWindow(createWindowOptions())
+
+  configureWindow(mainWindow)
+  mainWindow.loadURL(canvaUrl)
+}
+
+function createWindowOptions() {
+  return {
     width: 1440,
     height: 900,
     minWidth: 1024,
@@ -45,29 +86,57 @@ function createWindow() {
       allowRunningInsecureContent: false,
       webSecurity: true
     }
+  }
+}
+
+function configureWindow(window) {
+  window.removeMenu()
+
+  window.webContents.on('did-create-window', childWindow => {
+    configureWindow(childWindow)
   })
 
-  mainWindow.removeMenu()
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedUrl(url) && isPopupHost(new URL(url).hostname)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          ...createWindowOptions(),
+          width: 520,
+          height: 760,
+          minWidth: 520,
+          minHeight: 640,
+          modal: false,
+          autoHideMenuBar: true
+        }
+      }
+    }
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedUrl(url)) {
+      navigateWindow(window, url)
+
+      return { action: 'deny' }
+    }
+
     openInBrowser(url)
 
     return { action: 'deny' }
   })
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  window.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedUrl(url)) {
       event.preventDefault()
+      openInBrowser(url)
     }
   })
 
-  mainWindow.webContents.on('will-redirect', (event, url) => {
+  window.webContents.on('will-redirect', (event, url) => {
     if (!isAllowedUrl(url)) {
       event.preventDefault()
+      openInBrowser(url)
     }
   })
 
-  mainWindow.loadURL(canvaUrl)
 }
 
 app.whenReady().then(() => {

@@ -7,6 +7,8 @@ The Flatpak manifest now builds the checked out fork directly and only keeps dow
 
 It also targets the current 25.08 Freedesktop runtime and prefers Wayland instead of X11.
 
+The Flatpak build skips Electron's install-time binary download and vendors the exact Electron Linux zip as a pinned Flatpak source, which avoids flaky packaging-time release downloads.
+
 ### Installation
 ```bash
 flatpak install flathub org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08 org.freedesktop.Sdk.Extension.node22//25.08
