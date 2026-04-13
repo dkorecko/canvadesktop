@@ -56,6 +56,16 @@ function navigateWindow(window, rawUrl) {
   }
 }
 
+function isCanvaAuthCallback(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+
+    return isTrustedHost(url.hostname) && url.pathname.startsWith('/oauth/authorized/')
+  } catch {
+    return false
+  }
+}
+
 function denyPermissionRequest(webContents, permission, callback) {
   callback(false)
 }
@@ -89,11 +99,11 @@ function createWindowOptions() {
   }
 }
 
-function configureWindow(window) {
+function configureWindow(window, openerWindow = null) {
   window.removeMenu()
 
   window.webContents.on('did-create-window', childWindow => {
-    configureWindow(childWindow)
+    configureWindow(childWindow, window)
   })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -136,6 +146,31 @@ function configureWindow(window) {
       openInBrowser(url)
     }
   })
+
+  if (openerWindow) {
+    const finishAuthFlow = url => {
+      if (!isCanvaAuthCallback(url)) {
+        return
+      }
+
+      if (!openerWindow.isDestroyed()) {
+        openerWindow.loadURL(canvaUrl)
+        openerWindow.focus()
+      }
+
+      if (!window.isDestroyed()) {
+        window.close()
+      }
+    }
+
+    window.webContents.on('did-navigate', (_, url) => {
+      finishAuthFlow(url)
+    })
+
+    window.webContents.on('did-redirect-navigation', (_, url) => {
+      finishAuthFlow(url)
+    })
+  }
 
 }
 
